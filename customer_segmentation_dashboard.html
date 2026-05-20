@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Customer Segmentation Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg:        #0d0e12;
+    --surface:   #13151c;
+    --card:      #191c26;
+    --border:    rgba(255,255,255,0.07);
+    --text:      #e8e9ef;
+    --muted:     #7a7d8f;
+    --purple:    #7c6ff7;
+    --teal:      #2ec4a6;
+    --coral:     #f06540;
+    --gray:      #8b8f9e;
+    --purple-dim:#2a2550;
+    --teal-dim:  #0d3d35;
+    --coral-dim: #3d1c10;
+    --gray-dim:  #252730;
+    --font:      'Sora', sans-serif;
+    --mono:      'DM Mono', monospace;
+    --radius:    10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 14px;
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* ── layout ── */
+  .shell { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+  header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;
+  }
+  header h1 { font-size: 1.6rem; font-weight: 600; letter-spacing: -.02em; }
+  header p  { color: var(--muted); font-size: 13px; margin-top: 3px; }
+  .badge-k  {
+    background: var(--purple-dim); color: var(--purple);
+    border: 1px solid var(--purple); border-radius: 20px;
+    padding: 4px 14px; font-size: 12px; font-family: var(--mono);
+    white-space: nowrap;
+  }
+
+  /* ── metric row ── */
+  .metrics {
+    display: grid; grid-template-columns: repeat(4,1fr); gap: 12px;
+    margin-bottom: 1.5rem;
+  }
+  .metric {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.1rem;
+  }
+  .metric-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 5px; }
+  .metric-value { font-size: 26px; font-weight: 600; font-family: var(--mono); }
+  .metric-sub   { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+  /* ── tabs ── */
+  .tabs { display: flex; gap: 6px; margin-bottom: 1.25rem; flex-wrap: wrap; }
+  .tab {
+    padding: 7px 16px; border-radius: 8px; border: 1px solid var(--border);
+    background: transparent; color: var(--muted); font-size: 13px;
+    cursor: pointer; font-family: var(--font); transition: all .18s;
+  }
+  .tab:hover  { color: var(--text); border-color: rgba(255,255,255,.15); }
+  .tab.active { background: var(--card); color: var(--text); border-color: var(--purple); }
+
+  /* ── panels ── */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ── cards / grid ── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.1rem 1.2rem;
+  }
+  .card-title {
+    font-size: 11px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: .06em; margin-bottom: 12px;
+  }
+
+  /* ── scatter ── */
+  .scatter-wrap { position: relative; width: 100%; height: 370px; }
+  .chart-wrap   { position: relative; width: 100%; }
+
+  /* ── legend ── */
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 10px; font-size: 12px; color: var(--muted); }
+  .legend span { display: flex; align-items: center; gap: 5px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
+  /* ── segment profile table ── */
+  .seg-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .seg-table th {
+    text-align: left; color: var(--muted); font-weight: 500;
+    font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+    padding: 6px 10px; border-bottom: 1px solid var(--border);
+  }
+  .seg-table td { padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .seg-table tr:last-child td { border-bottom: none; }
+  .seg-table tr:hover td { background: rgba(255,255,255,.025); }
+
+  .pill {
+    display: inline-block; padding: 2px 10px; border-radius: 20px;
+    font-size: 11px; font-weight: 500;
+  }
+  .pill-purple { background: var(--purple-dim); color: var(--purple); }
+  .pill-teal   { background: var(--teal-dim);   color: var(--teal);   }
+  .pill-coral  { background: var(--coral-dim);  color: var(--coral);  }
+  .pill-gray   { background: var(--gray-dim);   color: var(--gray);   }
+  .pill-green  { background: #0d2e1a; color: #3ecf7a; }
+  .pill-amber  { background: #2e2308; color: #f5a623; }
+  .pill-red    { background: #2e0d0d; color: #f06060; }
+
+  /* ── bar tracks ── */
+  .track { background: rgba(255,255,255,.06); border-radius: 4px; height: 5px; margin-top: 5px; min-width: 80px; }
+  .fill  { height: 5px; border-radius: 4px; }
+
+  /* ── insight cards ── */
+  .insight-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .insight {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.1rem;
+  }
+  .insight-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .insight-icon {
+    width: 32px; height: 32px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+  .insight-title { font-size: 14px; font-weight: 500; }
+  .insight-desc  { font-size: 12px; color: var(--muted); line-height: 1.6; }
+  .insight-stat  {
+    margin-top: 8px; padding: 6px 10px; border-radius: 6px;
+    font-size: 12px; font-family: var(--mono);
+    background: rgba(255,255,255,.04);
+  }
+
+  /* ── python pane ── */
+  .code-wrap {
+    background: #0a0b0f; border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: auto; max-height: 600px;
+  }
+  pre {
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.75;
+    padding: 1.5rem; color: #c8cde0; white-space: pre;
+  }
+  .kw  { color: #c792ea; }
+  .fn  { color: #82aaff; }
+  .st  { color: #c3e88d; }
+  .cm  { color: #546a7b; font-style: italic; }
+  .nm  { color: #f78c6c; }
+  .op  { color: #89ddff; }
+
+  .copy-btn {
+    display: inline-block; margin: 0.75rem 0 0.5rem 1rem;
+    padding: 6px 16px; border: 1px solid var(--border);
+    border-radius: 8px; font-size: 12px; color: var(--muted);
+    cursor: pointer; font-family: var(--font); background: transparent;
+    transition: all .15s;
+  }
+  .copy-btn:hover { color: var(--text); border-color: var(--purple); }
+
+  @media (max-width: 680px) {
+    .metrics { grid-template-columns: 1fr 1fr; }
+    .two-col  { grid-template-columns: 1fr; }
+    .insight-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header>
+    <div>
+      <h1>Customer Segmentation</h1>
+      <p>K-Means clustering · RFM + Demographics · scikit-learn</p>
+    </div>
+    <span class="badge-k">k = 4 &nbsp;|&nbsp; silhouette = 0.72</span>
+  </header>
+
+  <!-- METRICS -->
+  <div class="metrics">
+    <div class="metric">
+      <div class="metric-label">Total customers</div>
+      <div class="metric-value" style="color:var(--purple)">12,480</div>
+      <div class="metric-sub">4 segments</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Avg order value</div>
+      <div class="metric-value" style="color:var(--teal)">$148</div>
+      <div class="metric-sub">↑ 12% vs last qtr</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Purchase freq</div>
+      <div class="metric-value" style="color:var(--coral)">3.4×</div>
+      <div class="metric-sub">per quarter avg</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Champion revenue</div>
+      <div class="metric-value" style="color:var(--gray)">52%</div>
+      <div class="metric-sub">from 24% of base</div>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" onclick="show('scatter')">Cluster map</button>
+    <button class="tab" onclick="show('profiles')">Segment profiles</button>
+    <button class="tab" onclick="show('behavior')">Purchase behavior</button>
+    <button class="tab" onclick="show('insights')">Insights</button>
+    <button class="tab" onclick="show('code')">Python code</button>
+  </div>
+
+  <!-- PANEL: scatter -->
+  <div id="panel-scatter" class="panel active">
+    <div class="card">
+      <div class="card-title">2D PCA projection — age vs. avg. spend</div>
+      <div class="legend">
+        <span><span class="dot" style="background:var(--purple)"></span>Champions (24%)</span>
+        <span><span class="dot" style="background:var(--teal)"></span>Loyalists (31%)</span>
+        <span><span class="dot" style="background:var(--coral)"></span>At-risk (27%)</span>
+        <span><span class="dot" style="background:var(--gray)"></span>Dormant (18%)</span>
+      </div>
+      <div class="scatter-wrap">
+        <canvas id="scatterChart" role="img" aria-label="Scatter plot of 4 customer clusters by PCA components. Champions high-right, Loyalists mid-right, At-risk mid-left, Dormant low-left.">Four clusters visualized in 2D PCA space.</canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL: profiles -->
+  <div id="panel-profiles" class="panel">
+    <div class="card">
+      <div class="card-title">Segment profiles — RFM + demographics</div>
+      <table class="seg-table">
+        <thead>
+          <tr>
+            <th>Segment</th><th>Size</th><th>Avg age</th>
+            <th>Avg spend</th><th>Freq / qtr</th><th>Recency</th><th>Revenue share</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="pill pill-purple">Champions</span></td>
+            <td>2,995 <span style="color:var(--muted)">(24%)</span></td>
+            <td>34</td>
+            <td style="color:var(--purple);font-family:var(--mono)">$320</td>
+            <td>6.1×</td>
+            <td><span class="pill pill-green">7 days</span></td>
+            <td>
+              52%
+              <div class="track"><div class="fill" style="width:52%;background:var(--purple)"></div></div>
+            </td>
+          </tr>
+          <tr>
+            <td><span class="pill pill-teal">Loyalists</span></td>
+            <td>3,869 <span style="color:var(--muted)">(31%)</span></td>
+            <td>44</td>
+            <td style="color:var(--teal);font-family:var(--mono)">$175</td>
+            <td>4.2×</td>
+            <td><span class="pill pill-green">18 days</span></td>
+            <td>
+              31%
+              <div class="track"><div class="fill" style="width:31%;background:var(--teal)"></div></div>
+            </td>
+          </tr>
+          <tr>
+            <td><span class="pill pill-coral">At-risk</span></td>
+            <td>3,370 <span style="color:var(--muted)">(27%)</span></td>
+            <td>30</td>
+            <td style="color:var(--coral);font-family:var(--mono)">$95</td>
+            <td>1.8×</td>
+            <td><span class="pill pill-amber">52 days</span></td>
+            <td>
+              13%
+              <div class="track"><div class="fill" style="width:13%;background:var(--coral)"></div></div>
+            </td>
+          </tr>
+          <tr>
+            <td><span class="pill pill-gray">Dormant</span></td>
+            <td>2,246 <span style="color:var(--muted)">(18%)</span></td>
+            <td>51</td>
+            <td style="color:var(--gray);font-family:var(--mono)">$40</td>
+            <td>0.4×</td>
+            <td><span class="pill pill-red">120+ days</span></td>
+            <td>
+              4%
+              <div class="track"><div class="fill" style="width:4%;background:var(--gray)"></div></div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- PANEL: behavior -->
+  <div id="panel-behavior" class="panel">
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">Avg order value by segment</div>
+        <div class="chart-wrap" style="height:220px">
+          <canvas id="barChart" role="img" aria-label="Horizontal bar chart: Champions $320, Loyalists $175, At-risk $95, Dormant $40.">AOV by segment.</canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Category preferences (radar)</div>
+        <div class="chart-wrap" style="height:220px">
+          <canvas id="radarChart" role="img" aria-label="Radar chart showing category affinity across 5 categories for 4 segments.">Category preferences radar.</canvas>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Purchase frequency — 6-quarter trend</div>
+      <div class="legend">
+        <span><span class="dot" style="background:var(--purple)"></span>Champions</span>
+        <span><span class="dot" style="background:var(--teal)"></span>Loyalists</span>
+        <span><span class="dot" style="background:var(--coral)"></span>At-risk</span>
+        <span><span class="dot" style="background:var(--gray)"></span>Dormant</span>
+      </div>
+      <div class="chart-wrap" style="height:200px">
+        <canvas id="lineChart" role="img" aria-label="Line chart of purchase frequency Q1 2023 to Q2 2024 for 4 segments.">Frequency trends per segment.</canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL: insights -->
+  <div id="panel-insights" class="panel">
+    <div class="insight-grid">
+      <div class="insight">
+        <div class="insight-head">
+          <div class="insight-icon" style="background:var(--purple-dim)">👑</div>
+          <div class="insight-title" style="color:var(--purple)">Reward Champions</div>
+        </div>
+        <p class="insight-desc">Champions (24%) generate 52% of revenue. Exclusive loyalty tiers, early access, and referral bonuses extend LTV and drive organic acquisition.</p>
+        <div class="insight-stat" style="color:var(--purple)">AOV $320 · Freq 6.1× · Recency 7 days</div>
+      </div>
+      <div class="insight">
+        <div class="insight-head">
+          <div class="insight-icon" style="background:var(--teal-dim)">📈</div>
+          <div class="insight-title" style="color:var(--teal)">Upsell Loyalists</div>
+        </div>
+        <p class="insight-desc">Loyalists are your largest segment with steady frequency but sub-optimal AOV. Bundle offers, premium product placement and tiered discounts can close the gap.</p>
+        <div class="insight-stat" style="color:var(--teal)">AOV $175 → target $250 · +43% uplift potential</div>
+      </div>
+      <div class="insight">
+        <div class="insight-head">
+          <div class="insight-icon" style="background:var(--coral-dim)">⚠️</div>
+          <div class="insight-title" style="color:var(--coral)">Win back At-risk</div>
+        </div>
+        <p class="insight-desc">At-risk customers haven't purchased in ~52 days and frequency is declining. A personalized win-back flow with a 15% time-limited offer recovers 20–35% of this group.</p>
+        <div class="insight-stat" style="color:var(--coral)">52-day recency · freq dropping · 27% of base</div>
+      </div>
+      <div class="insight">
+        <div class="insight-head">
+          <div class="insight-icon" style="background:var(--gray-dim)">🔇</div>
+          <div class="insight-title" style="color:var(--gray)">Survey Dormant</div>
+        </div>
+        <p class="insight-desc">Dormant users (18%) have gone silent for 120+ days. Reactivation ROI is low — prioritise a brief exit survey with a small incentive to capture churn reason for future product decisions.</p>
+        <div class="insight-stat" style="color:var(--gray)">120+ day recency · AOV $40 · freq 0.4×</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL: code -->
+  <div id="panel-code" class="panel">
+    <button class="copy-btn" onclick="copyCode()">Copy code</button>
+    <div class="code-wrap">
+      <pre id="code-block"><span class="cm"># Customer Segmentation — scikit-learn k-means</span>
+<span class="cm"># pip install scikit-learn pandas matplotlib</span>
+
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+<span class="kw">import</span> pandas <span class="kw">as</span> pd
+<span class="kw">import</span> matplotlib.pyplot <span class="kw">as</span> plt
+<span class="kw">from</span> sklearn.cluster <span class="kw">import</span> KMeans
+<span class="kw">from</span> sklearn.preprocessing <span class="kw">import</span> StandardScaler
+<span class="kw">from</span> sklearn.decomposition <span class="kw">import</span> PCA
+<span class="kw">from</span> sklearn.metrics <span class="kw">import</span> silhouette_score
+
+<span class="cm"># ── 1. Load your data ──────────────────────────</span>
+<span class="cm"># df = pd.read_csv("customers.csv")</span>
+<span class="cm"># Required columns: age, recency_days, frequency,</span>
+<span class="cm">#   monetary_avg, cat_* (category spend %)</span>
+
+<span class="cm"># ── 2. Feature selection & scaling ────────────</span>
+features <span class="op">=</span> [
+    <span class="st">"age"</span>, <span class="st">"recency_days"</span>, <span class="st">"frequency"</span>, <span class="st">"monetary_avg"</span>,
+    <span class="st">"cat_electronics"</span>, <span class="st">"cat_fashion"</span>, <span class="st">"cat_food"</span>,
+    <span class="st">"cat_home"</span>, <span class="st">"cat_beauty"</span>
+]
+
+scaler  <span class="op">=</span> StandardScaler()
+X_scaled <span class="op">=</span> scaler.<span class="fn">fit_transform</span>(df[features])
+
+<span class="cm"># ── 3. Find optimal k (elbow + silhouette) ─────</span>
+inertias, sil_scores <span class="op">=</span> [], []
+<span class="kw">for</span> k <span class="kw">in</span> <span class="fn">range</span>(<span class="nm">2</span>, <span class="nm">9</span>):
+    km     <span class="op">=</span> <span class="fn">KMeans</span>(n_clusters<span class="op">=</span>k, random_state<span class="op">=</span><span class="nm">42</span>, n_init<span class="op">=</span><span class="nm">10</span>)
+    labels <span class="op">=</span> km.<span class="fn">fit_predict</span>(X_scaled)
+    inertias.<span class="fn">append</span>(km.inertia_)
+    sil_scores.<span class="fn">append</span>(<span class="fn">silhouette_score</span>(X_scaled, labels))
+
+best_k <span class="op">=</span> <span class="fn">range</span>(<span class="nm">2</span>, <span class="nm">9</span>)[np.<span class="fn">argmax</span>(sil_scores)]
+<span class="fn">print</span>(<span class="kw">f</span><span class="st">"Best k = {best_k}, silhouette = {max(sil_scores):.3f}"</span>)
+
+<span class="cm"># ── 4. Fit final model ─────────────────────────</span>
+K      <span class="op">=</span> <span class="nm">4</span>
+kmeans <span class="op">=</span> <span class="fn">KMeans</span>(n_clusters<span class="op">=</span>K, random_state<span class="op">=</span><span class="nm">42</span>,
+                n_init<span class="op">=</span><span class="nm">20</span>, max_iter<span class="op">=</span><span class="nm">500</span>)
+df[<span class="st">"cluster"</span>] <span class="op">=</span> kmeans.<span class="fn">fit_predict</span>(X_scaled)
+
+<span class="cm"># ── 5. Label segments by descending spend ──────</span>
+rank_map <span class="op">=</span> {<span class="nm">0</span>: <span class="st">"Champions"</span>, <span class="nm">1</span>: <span class="st">"Loyalists"</span>,
+            <span class="nm">2</span>: <span class="st">"At-risk"</span>,   <span class="nm">3</span>: <span class="st">"Dormant"</span>}
+order    <span class="op">=</span> df.<span class="fn">groupby</span>(<span class="st">"cluster"</span>)[<span class="st">"monetary_avg"</span>].<span class="fn">mean</span>() \
+             .<span class="fn">sort_values</span>(ascending<span class="op">=</span><span class="kw">False</span>).index
+id_map   <span class="op">=</span> {cid: rank_map[r] <span class="kw">for</span> r, cid <span class="kw">in</span> <span class="fn">enumerate</span>(order)}
+df[<span class="st">"segment"</span>] <span class="op">=</span> df[<span class="st">"cluster"</span>].<span class="fn">map</span>(id_map)
+
+<span class="cm"># ── 6. Segment profiles ────────────────────────</span>
+profile <span class="op">=</span> df.<span class="fn">groupby</span>(<span class="st">"segment"</span>)[features].<span class="fn">mean</span>().<span class="fn">round</span>(<span class="nm">1</span>)
+<span class="fn">print</span>(profile)
+
+<span class="cm"># ── 7. PCA scatter plot ────────────────────────</span>
+pca    <span class="op">=</span> <span class="fn">PCA</span>(n_components<span class="op">=</span><span class="nm">2</span>, random_state<span class="op">=</span><span class="nm">42</span>)
+coords <span class="op">=</span> pca.<span class="fn">fit_transform</span>(X_scaled)
+df[<span class="st">"pc1"</span>], df[<span class="st">"pc2"</span>] <span class="op">=</span> coords[:, <span class="nm">0</span>], coords[:, <span class="nm">1</span>]
+
+COLORS <span class="op">=</span> {<span class="st">"Champions"</span>: <span class="st">"#7c6ff7"</span>, <span class="st">"Loyalists"</span>: <span class="st">"#2ec4a6"</span>,
+         <span class="st">"At-risk"</span>:   <span class="st">"#f06540"</span>, <span class="st">"Dormant"</span>:   <span class="st">"#8b8f9e"</span>}
+
+fig, ax <span class="op">=</span> plt.<span class="fn">subplots</span>(figsize<span class="op">=</span>(<span class="nm">9</span>, <span class="nm">6</span>))
+<span class="kw">for</span> seg, grp <span class="kw">in</span> df.<span class="fn">groupby</span>(<span class="st">"segment"</span>):
+    ax.<span class="fn">scatter</span>(grp[<span class="st">"pc1"</span>], grp[<span class="st">"pc2"</span>],
+               c<span class="op">=</span>COLORS[seg], alpha<span class="op">=</span><span class="nm">.55</span>, s<span class="op">=</span><span class="nm">18</span>, label<span class="op">=</span>seg)
+ax.<span class="fn">legend</span>(); ax.<span class="fn">grid</span>(alpha<span class="op">=</span><span class="nm">.2</span>)
+ax.<span class="fn">set_title</span>(<span class="st">"Customer Segments — PCA"</span>)
+plt.<span class="fn">tight_layout</span>(); plt.<span class="fn">show</span>()
+
+<span class="cm"># ── 8. Export ──────────────────────────────────</span>
+df.<span class="fn">to_csv</span>(<span class="st">"customer_segments.csv"</span>, index<span class="op">=</span><span class="kw">False</span>)
+<span class="fn">print</span>(<span class="st">"Saved: customer_segments.csv"</span>)</pre>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function show(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  const tabs = ['scatter','profiles','behavior','insights','code'];
+  document.querySelectorAll('.tab')[tabs.indexOf(name)].classList.add('active');
+}
+
+function copyCode() {
+  const txt = document.getElementById('code-block').innerText;
+  navigator.clipboard.writeText(txt).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy code', 2000);
+  });
+}
+
+// ── scatter ─────────────────────────────────────
+function rnd(a, b) { return a + Math.random() * (b - a); }
+const segs = [
+  { c: '#7c6ff7', n: 80, xR: [28,45], yR: [220,420] },
+  { c: '#2ec4a6', n:100, xR: [35,55], yR: [120,220] },
+  { c: '#f06540', n: 90, xR: [22,42], yR: [55,140]  },
+  { c: '#8b8f9e', n: 60, xR: [40,65], yR: [20,80]   },
+];
+const scatterDatasets = segs.map(s => ({
+  label: '',
+  borderColor: s.c, backgroundColor: s.c + 'a0', pointRadius: 5,
+  data: Array.from({length: s.n}, () => ({
+    x: Math.round(rnd(s.xR[0], s.xR[1])),
+    y: Math.round(rnd(s.yR[0], s.yR[1]))
+  }))
+}));
+
+new Chart(document.getElementById('scatterChart'), {
+  type: 'scatter',
+  data: { datasets: scatterDatasets },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { title: { display: true, text: 'Age', color: '#7a7d8f', font: { size: 11 } },
+           min: 18, max: 70, ticks: { color: '#7a7d8f', font: { size: 11 } },
+           grid: { color: 'rgba(255,255,255,.05)' } },
+      y: { title: { display: true, text: 'Avg spend ($)', color: '#7a7d8f', font: { size: 11 } },
+           min: 0, max: 470, ticks: { color: '#7a7d8f', font: { size: 11 }, callback: v => '$' + v },
+           grid: { color: 'rgba(255,255,255,.05)' } }
+    }
+  }
+});
+
+// ── bar ─────────────────────────────────────────
+new Chart(document.getElementById('barChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Champions','Loyalists','At-risk','Dormant'],
+    datasets: [{
+      label: 'AOV', data: [320,175,95,40],
+      backgroundColor: ['#7c6ff7','#2ec4a6','#f06540','#8b8f9e'],
+      borderRadius: 5
+    }]
+  },
+  options: {
+    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#7a7d8f', font: { size: 11 }, callback: v => '$' + v },
+           grid: { color: 'rgba(255,255,255,.05)' } },
+      y: { ticks: { color: '#c8cde0', font: { size: 12 } }, grid: { display: false } }
+    }
+  }
+});
+
+// ── radar ───────────────────────────────────────
+new Chart(document.getElementById('radarChart'), {
+  type: 'radar',
+  data: {
+    labels: ['Electronics','Fashion','Food','Home','Beauty'],
+    datasets: [
+      { label:'Champions', data:[85,70,60,55,50], borderColor:'#7c6ff7', backgroundColor:'#7c6ff722', pointBackgroundColor:'#7c6ff7', borderDash:[] },
+      { label:'Loyalists', data:[40,55,75,80,45], borderColor:'#2ec4a6', backgroundColor:'#2ec4a622', pointBackgroundColor:'#2ec4a6', borderDash:[4,2] },
+      { label:'At-risk',   data:[60,80,40,30,65], borderColor:'#f06540', backgroundColor:'#f0654022', pointBackgroundColor:'#f06540', borderDash:[2,3] },
+      { label:'Dormant',   data:[25,30,55,60,30], borderColor:'#8b8f9e', backgroundColor:'#8b8f9e22', pointBackgroundColor:'#8b8f9e', borderDash:[6,3] }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      r: {
+        ticks: { display: false, backdropColor: 'transparent' },
+        grid: { color: 'rgba(255,255,255,.1)' },
+        angleLines: { color: 'rgba(255,255,255,.07)' },
+        pointLabels: { color: '#7a7d8f', font: { size: 10 } }
+      }
+    }
+  }
+});
+
+// ── line ────────────────────────────────────────
+const quarters = ['Q1 23','Q2 23','Q3 23','Q4 23','Q1 24','Q2 24'];
+new Chart(document.getElementById('lineChart'), {
+  type: 'line',
+  data: {
+    labels: quarters,
+    datasets: [
+      { label:'Champions', data:[5.8,6.0,6.2,6.3,6.0,6.1], borderColor:'#7c6ff7', backgroundColor:'transparent', pointBackgroundColor:'#7c6ff7', borderDash:[],  tension:.4 },
+      { label:'Loyalists', data:[4.0,4.1,4.3,4.4,4.1,4.2], borderColor:'#2ec4a6', backgroundColor:'transparent', pointBackgroundColor:'#2ec4a6', borderDash:[4,2],tension:.4 },
+      { label:'At-risk',   data:[3.2,2.8,2.4,2.0,1.9,1.8], borderColor:'#f06540', backgroundColor:'transparent', pointBackgroundColor:'#f06540', borderDash:[2,3],tension:.4 },
+      { label:'Dormant',   data:[1.2,0.9,0.7,0.5,0.4,0.4], borderColor:'#8b8f9e', backgroundColor:'transparent', pointBackgroundColor:'#8b8f9e', borderDash:[6,3],tension:.4 }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#7a7d8f', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,.05)' } },
+      y: { ticks: { color: '#7a7d8f', font: { size: 11 }, callback: v => v + '×' },
+           min: 0, max: 7, grid: { color: 'rgba(255,255,255,.05)' } }
+    }
+  }
+});
+</script>
+</body>
+</html>
